@@ -2,13 +2,46 @@
 
 在 Apple M5 Pro 上搭建原生 MuJoCo 与 BAM 仿真，从随机初始化完成 800768 步 PPO 站立训练，再进行误差分组评估、ONNX 导出与回放。教程保留实际命令、日志结果、失败案例和组合 GIF；实机硬件测试尚未进行。
 
+> 本文同步自 [Space 教程页面](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41)。Git 仓库提供代码、文档和静态 PNG，未上传模型、训练输出、视频、GIF、离线 HTML 或 ZIP。原始结果包和动态媒体可在 Space 页面中查看，需要对应页面的访问权限；文中的训练结果是历史实验记录，模型需自行训练生成。
+
 本次记录日期为 2026 年 11 月 4 日。教程主线是**按实机控制契约训练站立策略**。正式模型没有加载旧站立权重，也没有使用官方预训练权重；“从零”指随机初始化 PPO。配套源码包中的训练器、环境和契约是必要组成部分，仅克隆官方机器人仓库不能得到这套 Mac 训练入口。
 
-> 仓库交付范围：代码、文档和静态 PNG。本文记录的模型、训练输出、视频、GIF、离线 HTML 与原始结果包未上传；下方使用回放静态截图。原有结果为历史实验记录，需要自行训练生成新产物。组件关系和产品对比见 [组件说明](docs/COMPONENTS.md)。
+# 组件关系与方案对比
+
+## 从仿真训练到机器人运行
+
+![MicroDuck 从仿真训练到机器人运行组件关系图](docs/assets/architecture.png)
+
+图中重点展示本教程 Mac 路径。训练环境把动作处理、BAM 执行器模型、MuJoCo 物理计算、观测、奖励和终止条件组织起来；PPO 根据交互数据更新策略网络。MJCF 描述机器人结构与物理参数，供 MuJoCo 加载；BAM 描述电机行为，PPO 负责学习。部署时导出策略及观测归一化，由机器人运行时执行推理。图中的实机部分表示部署目标，本教程尚未进行硬件验证。
+
+## 企业方案与本教程和官方方案的组件对比
+
+企业方案列给出按任务选配的产品和框架，不是必须全部安装的统一标准。官方训练路径基于 mjlab、MuJoCo Warp 和 rsl_rl；本教程采用自定义 Gymnasium 环境、MuJoCo CPU 和 SB3。两条路径的训练入口、奖励配置和检查点格式不同。
+
+| 负责什么 | 企业方案中的具体产品或框架 | 本教程 Mac Demo 对应部分 | MicroDuck 官方对应部分 |
+| --- | --- | --- | --- |
+| 场景与传感器仿真平台 | NVIDIA Isaac Sim，组织场景、渲染和传感器仿真 | 自建 MJCF 室内场景 + MuJoCo 渲染；尚未接入视觉感知 | mjlab 场景与地形配置 + CPU MuJoCo 回放场景 |
+| 物理引擎 | Isaac Sim 默认 PhysX，也可选实验性 Newton 后端；独立运动训练可选 MuJoCo / MuJoCo Warp | 原生 MuJoCo CPU，计算动力学、碰撞与接触 | MuJoCo Warp 用于 GPU 训练，原生 MuJoCo 用于 CPU 回放 |
+| 组织训练环境 | NVIDIA Isaac Lab 或 mjlab | 自写 Gymnasium 环境 | mjlab |
+| 策略训练算法 | rsl_rl、Stable-Baselines3 | SB3 的 PPO | rsl_rl 的 PPO |
+| 电机行为建模 | BAM，或经过标定的执行器模型 | BAM M6 XL330 | BAM |
+| 机器人模块通信 | ROS 2 | Python 内部调用 | 原生机器人运行系统，不能直接等同于 ROS 2 |
+| 路径规划与避障 | Nav2 | 键盘人工控制 | 需要在运动策略之外接入 |
+| 实验与模型记录 | MLflow 等 | 本地 JSON、CSV、TensorBoard | 官方训练日志与检查点流程 |
+| 机器人数据查看与回放 | Foxglove + MCAP | 仿真窗口、报告、视频 | 运行日志与项目回放工具 |
+| 部署策略推理 | ONNX Runtime；适配 NVIDIA 硬件时可选 TensorRT | ONNX Runtime | ONNX 策略 + robotd |
+
+Isaac Sim 是仿真平台；PhysX、Newton 和 MuJoCo 位于物理计算层，负责推进运动、碰撞和接触。Newton 可集成 MuJoCo Warp 求解器，不能简单理解为与 MuJoCo 完全互斥的选择。Isaac Lab 与 mjlab 是训练框架，PPO 是学习算法。Nav2 负责导航规划；接入双足机器人时仍需适配定位、速度接口和可通行性，不能仅安装后就获得越槛能力。本教程的 61 维观测没有障碍物地图或相机输入，键盘驾驶也不等于自主避障。 [Isaac Sim 物理后端说明](https://docs.isaacsim.omniverse.nvidia.com/latest/physics/index.html)、[Newton 后端与限制](https://docs.isaacsim.omniverse.nvidia.com/latest/physics/newton_physics.html)。
+
+表中的自建室内场景和键盘控制属于后续本地扩展；原正式训练记录仍以本教程各步骤中的配置与结果为准，配套下载包不会随本地代码修改自动更新。
+
+产品资料：[Isaac Sim](https://developer.nvidia.com/isaac/sim)、[Isaac Lab](https://developer.nvidia.com/isaac/lab)、[mjlab](https://github.com/mujocolab/mjlab)、[BAM](https://bam.readthedocs.io/en/latest/)、[Nav2](https://docs.nav2.org/rolling/)、[MLflow](https://mlflow.org/docs/latest/ml/tracking/)、[Foxglove](https://foxglove.dev/)、[ONNX Runtime](https://onnxruntime.ai/docs/)。
 
 # 1 先看训练前后的真实回放
 
 ![2048 步短训与 800768 步正式训练的相同种子对比](tutorial/assets/before_after_poster.png)
+
+*此处为回放静态截图；[查看 Space 中的动态回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#102bae3c-19bd-40da-a806-b6fd3d3d1cc7)。*
 
 左侧为本次 2048 步短训模型，在约 0.94 秒触发跌倒终止，随后保持最后一帧；右侧为正式模型在相同契约、标称物理、seed 2027、零速度命令下的前 5 秒。两侧时间戳为各自的仿真时间，失败后的定格不代表机器人继续执行了动作。
 
@@ -64,11 +97,12 @@ PY
 
 # 3 准备项目与安装环境
 
-克隆本仓库后，项目已包含为本教程编写的训练、环境、契约和导出代码，以及 `contracts/`、`scripts/`、`pyproject.toml` 和 `uv.lock`。安装脚本会在本机创建 `.venv` 并下载固定版本的上游模型，无需复制其他机器的虚拟环境。
+克隆本仓库后，项目已包含为本教程的 Mac 训练与验证流程专门编写的 `train.py`、`microduck_env.py`、`runtime_env.py`、`robot_contract.py`、`export_runtime.py`，以及配套的 `contracts/`、`scripts/`、`pyproject.toml` 和 `uv.lock`，可直接按后续步骤使用。这些配套代码与官方上游源码是两部分；上游提供机器人模型、BAM 等基础代码，版本固定在前表列出的提交。安装脚本会在你的机器上创建 `.venv`、按 `uv.lock` 安装依赖并下载固定版本的上游模型，无需复制其他机器的虚拟环境。
 
-克隆后进入项目目录：
+在新机器上克隆并进入项目目录：
 
 ```bash
+git clone https://github.com/lynnyan/microduck-mac-lab.git
 cd microduck-mac-lab
 ```
 
@@ -100,7 +134,7 @@ git clone --no-checkout --filter=blob:none \
 git -C upstream checkout bae39f5900b318f7e87fc485c30a31213cfa14eb
 ```
 
-已有 `upstream/` 时使用 `fetch_upstream.sh` 检查即可，不要重复 clone。安装日志见 [安装检查原始输出](tutorial/evidence/setup_runtime_final.log)。
+已有 `upstream/` 时使用 `fetch_upstream.sh` 检查即可，不要重复 clone。安装日志见 [安装检查原始输出（原始结果包内：setup_runtime_final.log）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#6d3b70e9-1947-4d41-b11e-87b450577911)。
 
 # 4 先验证物理与接口
 
@@ -126,7 +160,7 @@ git -C upstream checkout bae39f5900b318f7e87fc485c30a31213cfa14eb
 
 **一个真实失败案例：**初次验证曾把“固定 HOME 应站立 3 秒”当成通过条件，实际零动作基线约 1.24 秒倒下。HOME 是参考姿态，不是平衡控制器，因此最终检查如实记录这条基线，并验证跌倒重置和后续学习策略，而不把它误报为稳定站立。
 
-原始数据见 [基础验证 JSON](tutorial/evidence/verification.json)、[契约验证 JSON](tutorial/evidence/runtime_contract_tests.json) 和 [回归测试输出](tutorial/evidence/runtime_contract_tests.log)。
+原始数据见 [基础验证 JSON（原始结果包内：verification.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#0af22cec-5c24-4f97-9d58-34cf8b1ae564)、[契约验证 JSON（原始结果包内：runtime_contract_tests.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#0af22cec-5c24-4f97-9d58-34cf8b1ae564) 和 [回归测试输出（原始结果包内：runtime_contract_tests.log）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#0af22cec-5c24-4f97-9d58-34cf8b1ae564)。
 
 # 5 明确训练和实机共同遵循的契约
 
@@ -359,7 +393,7 @@ bash scripts/tensorboard.sh
 
 在浏览器访问 `http://127.0.0.1:6006`，按 Ctrl+C 停止。该入口已经验证可返回 HTTP 200，测试服务随后停止，没有持续占用端口。
 
-原始曲线数据见 [progress.csv](tutorial/evidence/progress.csv)，正式训练输出见 [runtime_stand_v1.log](tutorial/evidence/runtime_stand_v1.log)。
+原始曲线数据见 [progress.csv（原始结果包内：progress.csv）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#54bc56a2-2d02-4f80-9cf3-e9ce259c39a4)，正式训练输出见 [runtime_stand_v1.log（原始结果包内：runtime_stand_v1.log）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#54bc56a2-2d02-4f80-9cf3-e9ce259c39a4)。
 
 # 9 对三种误差条件分别验证
 
@@ -395,7 +429,9 @@ bash scripts/tensorboard.sh
 
 ![同一模型在标称 传感器和动力学误差下的组合回放](tutorial/assets/robustness_poster.png)
 
-逐回合数据：[标称](tutorial/evidence/eval_nominal.json)、[传感器误差](tutorial/evidence/eval_sensors.json)、[动力学误差](tutorial/evidence/eval_dynamics.json)。
+*此处为回放静态截图；[查看 Space 中的动态回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#881d537b-ad8c-467a-a1d5-9cca6c3bbe90)。*
+
+逐回合数据：[标称（原始结果包内：eval_nominal.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#03b7747c-c271-4a19-80f1-348eb2315a89)、[传感器误差（原始结果包内：eval_sensors.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#03b7747c-c271-4a19-80f1-348eb2315a89)、[动力学误差（原始结果包内：eval_dynamics.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#03b7747c-c271-4a19-80f1-348eb2315a89)。
 
 # 10 导出包含归一化的 ONNX
 
@@ -444,9 +480,11 @@ bash scripts/view.sh \
   --report outputs/runtime_stand_v1/eval_onnx_dynamics.json
 ```
 
-结果为 10/10 次达到 20 秒且未跌倒。数据见 [ONNX 回放评估 JSON](tutorial/evidence/eval_onnx_dynamics.json)。
+结果为 10/10 次达到 20 秒且未跌倒。数据见 [ONNX 回放评估 JSON（原始结果包内：eval_onnx_dynamics.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#dcee2bd8-be68-4230-8b7f-46fd91d56b4a)。
 
 ![训练端与 ONNX 在相同种子和标称物理下的并排回放](tutorial/assets/checkpoint_onnx_poster.png)
+
+*此处为回放静态截图；[查看 Space 中的动态回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#60523507-f1ae-42fc-ad37-708dde7c3d5c)。*
 
 左侧为重新加载的 SB3 checkpoint 与配对归一化，右侧为 ONNX，均使用 seed 2027、标称物理和零速度命令。这是 6 秒视觉对照；精确数值一致性以 364 组输入的对齐检查为依据，不能仅凭两个画面相似就判定导出正确。
 
@@ -460,16 +498,21 @@ bash scripts/view.sh \
   --dr-profile dynamics --seconds 20 --episodes 1
 ```
 
-Mac 的原生交互窗口由 `mjpython` 启动，`view.sh` 已处理平台差异。`--headless` 用于不渲染的评估；`--video` 用于离屏录制 MP4。
+Mac 的普通回放窗口由 `mjpython` 启动；后续新增的 `--keyboard` 驾驶窗口使用普通 Python 主线程处理按键，`view.sh` 已区分这两种启动方式。`--headless` 用于不渲染的评估；`--video` 用于离屏录制 MP4。
 
-原始视频保留在配套文件中，HTML 版可直接播放：
+下列链接定位到 Space 页面中的原始视频附件，需要页面访问权限。本仓库不托管视频；本地生成的 HTML 版可直接播放相应 MP4：
 
-- 本次原有的 5 秒候选预览：视频未随仓库上传，可按第 14 节命令在本地重新录制。
-- 2048 步短训失败回放：视频未随仓库上传，可按第 14 节命令在本地重新录制。
-- 标称物理 6 秒回放：视频未随仓库上传，可按第 14 节命令在本地重新录制。
-- 传感器误差 6 秒回放：视频未随仓库上传，可按第 14 节命令在本地重新录制。
-- 动力学误差 6 秒回放：视频未随仓库上传，可按第 14 节命令在本地重新录制。
-- 重新加载 checkpoint 的 6 秒回放：视频未随仓库上传，可按第 14 节命令在本地重新录制。
+- [本次原有的 5 秒候选预览](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#6bf0d0d5-7681-4071-9b78-7c161d9d0173)
+
+- [2048 步短训失败回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#53f9f1d9-f078-461a-a544-b0ecc1c7b616)
+
+- [标称物理 6 秒回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#357ff5f0-1bd9-4353-9743-8c49ce017dca)
+
+- [传感器误差 6 秒回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#070e7512-e5b0-48f6-b905-762ab237d114)
+
+- [动力学误差 6 秒回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#8b7d1812-5354-4408-b05d-25ef73245785)
+
+- [重新加载 checkpoint 的 6 秒回放](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#b0f3326f-5a38-4c7d-b88c-ef74a192377d)
 
 这些视频均由 MuJoCo 渲染，没有使用生成式图像补造动作。组合 GIF 采用 10 fps，原始视频保留 50 fps。
 
@@ -554,7 +597,7 @@ cp outputs/runtime_stand_v1/preview.mp4 tutorial/assets/original_preview.mp4
 .venv/bin/python scripts/build_tutorial.py
 ```
 
-组合脚本读取这些真实视频，添加标签和时间戳，生成 3 个循环 GIF，并从原始 CSV/JSON 绘制训练与评估图。短训模型失败后，GIF 明确标记“失败后定格”，不会接入另一次成功回合来掩盖失败。媒体参数和校验值见 [media_manifest.json](tutorial/evidence/media_manifest.json)。
+组合脚本读取这些真实视频，添加标签和时间戳，生成 3 个循环 GIF，并从原始 CSV/JSON 绘制训练与评估图。短训模型失败后，GIF 明确标记“失败后定格”，不会接入另一次成功回合来掩盖失败。媒体参数和校验值见 [media_manifest.json（原始结果包内：media_manifest.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#14ece290-35ea-4502-bdea-760742d5fd53)。
 
 `build_tutorial.py` 汇集原始结果、生成 `tutorial/index.html`，并打包完整离线教程、训练源码和原始结果三个 ZIP。双击 `tutorial/index.html` 即可离线查看图文和播放 MP4，无需持续运行网页服务。
 
@@ -572,13 +615,16 @@ cp outputs/runtime_stand_v1/preview.mp4 tutorial/assets/original_preview.mp4
 | `tutorial/evidence/` | 本教程使用的日志、CSV、JSON 和媒体清单 |
 | `tutorial/index.html` | 可离线查看并播放视频的图文版 |
 
-本次正式模型的全部逐回合结果汇总在 [results.json](tutorial/evidence/results.json)。在新机器上复现，首先解压配套源码、安装锁定依赖，再使用新的输出目录训练；同一 seed 也不保证不同平台的浮点和接触求解逐位一致，应比较多个种子的统计与回放。
+本次正式模型的全部逐回合结果汇总在 [results.json（原始结果包内：results.json）](https://chatgpt.com/space/page_943ab998d2748191832e617b17339b41#bb087123-c689-47e5-9f33-590450f373af)。在新机器上复现，首先克隆本仓库、安装锁定依赖，再使用新的输出目录训练；同一 seed 也不保证不同平台的浮点和接触求解逐位一致，应比较多个种子的统计与回放。
 
 实机接入前仍要核对真实固件、robotd tuning、关节零位、IMU 坐标和时序。`manifest.json` 不会自动替步态设置 scale、滤波和 gain；需要对照 `deployment_requirements.json`。本次没有连接真实舵机、运行完整 Rust daemon、发布模型或执行硬件测试。
 
 ## 相关原始资料
 
 - [MicroDuck 官方训练源码](https://github.com/pollen-robotics/microduck_rl/tree/bae39f5900b318f7e87fc485c30a31213cfa14eb)
+
 - [实机观测契约](https://github.com/pollen-robotics/microduck/blob/d13be2c1a2f4b1e0b0e499b08b92f870518b1384/duck-control/src/obs.rs)
+
 - [实机缩放 滤波与增益](https://github.com/pollen-robotics/microduck/blob/d13be2c1a2f4b1e0b0e499b08b92f870518b1384/robotd/src/control.rs)
+
 - [BAM 固定版本](https://github.com/Rhoban/bam/tree/62bd8ce12154340be97e06f7f41a0ca8f116d967)
