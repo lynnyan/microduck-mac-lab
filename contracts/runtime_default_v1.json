@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "name": "microduck_robotd_defaults_v1",
+  "runtime_repo": "https://github.com/pollen-robotics/microduck",
+  "runtime_commit": "d13be2c1a2f4b1e0b0e499b08b92f870518b1384",
+  "training_asset_commit": "bae39f5900b318f7e87fc485c30a31213cfa14eb",
+  "observation_dim": 61,
+  "action_dim": 14,
+  "control_hz": 50,
+  "physics_dt": 0.005,
+  "joint_names": ["left_hip_yaw", "left_hip_roll", "left_hip_pitch", "left_knee", "left_ankle", "neck_pitch", "head_pitch", "head_yaw", "head_roll", "right_hip_yaw", "right_hip_roll", "right_hip_pitch", "right_knee", "right_ankle"],
+  "home": [0.0, -0.0873, -0.4579, -0.0049, 0.4530, 0.3491, 0.3491, 0.0, 0.0, 0.0, 0.0873, 0.4579, 0.0049, -0.4530],
+  "observation_blocks": [["gyro", 0, 3], ["projected_gravity", 3, 6], ["joint_pos_rel", 6, 20], ["joint_vel", 20, 34], ["last_raw_action", 34, 48], ["twist", 48, 51], ["head_pose", 51, 55], ["body_pose", 55, 61]],
+  "body_zero_indices": [55, 56, 60],
+  "mouth_hardware_index": 9,
+  "policy_to_hardware": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14],
+  "last_action": "raw_policy_output_before_scale_filter_and_target_clamp",
+  "slots": {
+    "stand": {"action_scale": 1.0, "kp_fw": 160.0},
+    "walk": {"action_scale": 0.9, "kp_fw": 200.0}
+  },
+  "target_filter": {"head_alpha": 0.5, "legs_alpha": 0.7, "first_tick": "unfiltered", "history": "filtered_targets_before_safety_clamp"},
+  "actuator_target_bounds": [-3.141592653589793, 3.141592653589793],
+  "actuator": {"motor": "xl330", "model": "m6", "voltage": 7.4, "voltage_sag_gain": 0.1, "voltage_min": 6.0, "max_current": null},
+  "supported_commands": {"stand": "zero twist; head deltas trained; body must remain zero", "walk": "bounded twist and head deltas; body must remain zero"},
+  "scope": "Steady-state stand/walk slots with fixed robotd tuning. Mode transitions, fall handling, startup ramps, other skills and per-robot calibration require separate rehearsal.",
+  "sources": ["duck-control/src/obs.rs", "duck-control/src/model.rs", "duck-control/src/safety.rs", "robotd/src/control.rs"]
+}

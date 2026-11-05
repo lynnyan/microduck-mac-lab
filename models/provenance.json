@@ -1,0 +1,8 @@
+{
+  "repository": "pollen-robotics/microduck-policies",
+  "revision": "665ae4eb20bfe13bca1ef4ea6d4bb6b4a096e448",
+  "file": "alpha_walking.onnx",
+  "sha256": "e36332d383997d51401897734cd3e79cf5038406feddb18b4d57ecfb141daa6c",
+  "source": "https://huggingface.co/pollen-robotics/microduck-policies/blob/665ae4eb20bfe13bca1ef4ea6d4bb6b4a096e448/alpha_walking.onnx",
+  "role": "official pretrained demonstration; not trained on this Mac"
+}

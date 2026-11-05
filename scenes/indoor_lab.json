@@ -1,0 +1,12 @@
+{
+  "description": "Designed example, not a measured room. Lengths in metres; friction is an uncalibrated assumption.",
+  "room": {"x_min": -0.6, "x_max": 3.4, "width": 3.0, "wall_height": 0.3},
+  "floor_friction": [0.8, 0.005, 0.0001],
+  "threshold": {"center_xy": [0.9, 0.0], "length_x": 0.10, "width_y": 1.20, "height": 0.01},
+  "boxes": [
+    {"name": "box_a", "center_xy": [1.65, 0.50], "size_xyz": [0.35, 0.35, 0.25]},
+    {"name": "box_b", "center_xy": [2.20, -0.45], "size_xyz": [0.45, 0.35, 0.20]},
+    {"name": "box_c", "center_xy": [2.80, 0.45], "size_xyz": [0.30, 0.50, 0.30]}
+  ],
+  "goal_xy": [3.05, 0.0]
+}
