@@ -226,3 +226,5 @@ bash scripts/fetch_demo.sh
 - [Stable Baselines3 PPO](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html)、[MuJoCo Python](https://mujoco.readthedocs.io/en/stable/python.html)。
 
 上游代码与模型资产的许可不同；保留 `upstream/LICENSE` 和 `upstream/LICENSE-MODELS.md`。官方模型网格采用 CC BY-NC-SA 4.0，商业使用前需按原许可核对适用范围。
+
+本文档由 superagent 维护。
